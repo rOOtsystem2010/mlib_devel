@@ -112,7 +112,7 @@ module roach_infrastructure #(
     .CLKOUT2_DIVIDE     (DIVIDE),
     .CLKOUT3_DIVIDE     (DIVIDE),
     .CLKOUT4_DIVIDE     (DIVIDE),
-    .CLKOUT5_DIVIDE     (MULTIPLY/DIVCLK/2),
+    .CLKOUT5_DIVIDE     (DIVIDE),
     .CLKOUT6_DIVIDE     (),
     .CLKOUT4_CASCADE    ("FALSE"),
     .CLOCK_HOLD         ("FALSE"),
