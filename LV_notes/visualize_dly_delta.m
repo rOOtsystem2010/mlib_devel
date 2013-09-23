@@ -46,18 +46,18 @@ num_dly_2plot = num_dly_per_per/2;
 
 dly_loc = linspace(0,num_dly_2plot-1,num_dly_2plot)*DLY_DELTA+per+half_per;
 for dly = 1:num_dly_2plot
-    plot([dly_loc(dly)*1e9 dly_loc(dly)*1e9],[-0.5,1.5],'m')
+    plot([dly_loc(dly)*1e9 dly_loc(dly)*1e9],[0.85,1.15],'m')
 end
-text(dly_loc(1)*1e9+0.1*half_per,1.5,[num2str(DLY_DELTA*1e12),'ps'])
+text(dly_loc(1)*1e9+0.1*half_per,1.05,[num2str(DLY_DELTA*1e12),'ps'])
 
 num_hold_per_per = per/HOLD_TIME;
 num_hold_2plot = num_hold_per_per/2;
 
 hold_loc = linspace(0,num_hold_2plot-1,num_hold_2plot)*HOLD_TIME+2*per+half_per;
 for hld = 1:num_hold_2plot
-    plot([hold_loc(hld)*1e9 hold_loc(hld)*1e9],[-0.5,1.5],'g')
+    plot([hold_loc(hld)*1e9 hold_loc(hld)*1e9],[0.85,1.15],'g')
 end
-text(hold_loc(1)*1e9+0.1*half_per,1.5,[num2str(HOLD_TIME*1e12),'ps'])
+text(hold_loc(1)*1e9+0.1*half_per,1.05,[num2str(HOLD_TIME*1e12),'ps'])
 
 
 title({['Clk Freq ',num2str(clk/1e6),' MHz, Period ',num2str(per*1e9),' ns']; ...
