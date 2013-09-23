@@ -83,7 +83,7 @@ generate if (BYPASS == 1) begin :bypass_bit_align
   assign bit_align_done = 1'b1;
   assign bit_align_fail = 1'b0;
 
-  assign dly_inc_dec_n  = {DATA_WIDTH{1'b0}};
+  assign dly_inc_dec_n  = {DATA_WIDTH{1'b0}}; //replicate single bit 0
   assign dly_en         = {DATA_WIDTH{1'b0}};
   assign dly_rst        = {DATA_WIDTH{1'b0}};
 
