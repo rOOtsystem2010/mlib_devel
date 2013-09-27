@@ -2,13 +2,23 @@ clear; clc; close all;
 
 round_hund=@(x) round(x*100)/100;
 
-clk = 200e6;
+clk = 286e6;
+refclk = 200e6;
+delays_per_ref = 64;
+
+DLY_DELTA = 1/refclk/delays_per_ref; %specified in ps
+HOLD_TIME = 400e-12; % specified in ps
+BIT_STEPS = HOLD_TIME/DLY_DELTA+1;
+
+
+
+
 num_per = 4;
 %num_dly_2plot = 10;
 
 per = 1/clk;
 half_per = per/2;
-num_half_per = num_per*2;
+num_half_per = 32;
 
 
 t = linspace(0,num_per*per,10000);
@@ -35,14 +45,9 @@ text(half_per*1e9+0.1*half_per,1.5,[num2str(half_per*1e9),' ns'])
 plot([per*1e9 per*1e9],[-0.5 1.5],'k:')
 text(per*1e9+0.1*half_per,1.5,[num2str(per*1e9),' ns'])
 
-
-
-DLY_DELTA = 78e-12; %specified in ps
-HOLD_TIME = 400e-12; % specified in ps
-BIT_STEPS = HOLD_TIME/DLY_DELTA+1;
-
 num_dly_per_per = per/DLY_DELTA;
-num_dly_2plot = num_dly_per_per/2;
+%num_dly_2plot = num_dly_per_per/2;
+num_dly_2plot = num_half_per;
 
 dly_loc = linspace(0,num_dly_2plot-1,num_dly_2plot)*DLY_DELTA+per+half_per;
 for dly = 1:num_dly_2plot
@@ -61,6 +66,7 @@ text(hold_loc(1)*1e9+0.1*half_per,1.05,[num2str(HOLD_TIME*1e12),'ps'])
 
 
 title({['Clk Freq ',num2str(clk/1e6),' MHz, Period ',num2str(per*1e9),' ns']; ...
-    ['Num 78ps delays per period: \approx ',num2str(round_hund(num_dly_per_per))]; ...
+    ['Ref Clk Freq ',num2str(refclk/1e6),' MHz, assume 32 delays per half period'];...
+    ['Num ',num2str(DLY_DELTA*1e12),'ps delays per half period: \approx ',num2str(round_hund(num_dly_per_per/2))]; ...
     ['Num 400ps hold times per period: \approx ',num2str(round_hund(num_hold_per_per))]; ...
     ['Num delays in hold: \approx ',num2str(round_hund(BIT_STEPS-1)),' (BIT STEPS \approx',num2str(round_hund(BIT_STEPS)),')']})
