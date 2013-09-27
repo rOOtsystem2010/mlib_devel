@@ -70,3 +70,6 @@ title({['Clk Freq ',num2str(clk/1e6),' MHz, Period ',num2str(per*1e9),' ns']; ..
     ['Num ',num2str(DLY_DELTA*1e12),'ps delays per half period: \approx ',num2str(round_hund(num_dly_per_per/2))]; ...
     ['Num 400ps hold times per period: \approx ',num2str(round_hund(num_hold_per_per))]; ...
     ['Num delays in hold: \approx ',num2str(round_hund(BIT_STEPS-1)),' (BIT STEPS \approx',num2str(round_hund(BIT_STEPS)),')']})
+
+text(0.5,-0.7,'32 delays plotted, length calculated from refclk','color','m')
+text(0.5,-0.9,'FPGA clk plotted in blue','color','blue')
