@@ -1,4 +1,4 @@
-module qdrc_phy_bit_train #(
+module qdrc_phy_bit_train_LV #(
     parameter DATA_WIDTH = 36
   ) (
     input                     clk,
