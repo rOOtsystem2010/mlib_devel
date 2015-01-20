@@ -79,7 +79,8 @@ END Program par
 # Type "trce -h" for a detailed list of trce command line options
 #
 Program post_par_trce
--e 200;                     # Produce error report limited to 200 items per constraint
+-e 1;                       # Produce error report limited to 1 item per failing constraint
+-n 5000;                    # Show up to 5000 failing endpoints
 #-o <design>.twr;           # Output trace report file
 -xml <design>.twx;          # Output XML version of the timing report
 #-tsi <design>.tsi;         # Produce Timing Specification Interaction report
