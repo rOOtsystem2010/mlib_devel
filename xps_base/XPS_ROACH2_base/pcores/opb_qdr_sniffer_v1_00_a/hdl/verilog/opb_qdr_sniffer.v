@@ -15,63 +15,61 @@ module opb_qdr_sniffer #(
     parameter QDR_LATENCY    = 10,
     parameter ENABLE         = 0
   )(
-    input  OPB_Clk,
-    input  OPB_Rst,
+    input         OPB_Clk,
+    input         OPB_Rst,
     output [0:31] Sl_DBus,
-    output Sl_errAck,
-    output Sl_retry,
-    output Sl_toutSup,
-    output Sl_xferAck,
+    output        Sl_errAck,
+    output        Sl_retry,
+    output        Sl_toutSup,
+    output        Sl_xferAck,
     input  [0:31] OPB_ABus,
     input  [0:3]  OPB_BE,
     input  [0:31] OPB_DBus,
-    input  OPB_RNW,
-    input  OPB_select,
-    input  OPB_seqAddr,
+    input         OPB_RNW,
+    input         OPB_select,
+    input         OPB_seqAddr,
 
-    input  OPB_Clk_config,
-    input  OPB_Rst_config,
+    input         OPB_Clk_config,
+    input         OPB_Rst_config,
     output [0:31] Sl_DBus_config,
-    output Sl_errAck_config,
-    output Sl_retry_config,
-    output Sl_toutSup_config,
-    output Sl_xferAck_config,
+    output        Sl_errAck_config,
+    output        Sl_retry_config,
+    output        Sl_toutSup_config,
+    output        Sl_xferAck_config,
     input  [0:31] OPB_ABus_config,
     input  [0:3]  OPB_BE_config,
     input  [0:31] OPB_DBus_config,
-    input  OPB_RNW_config,
-    input  OPB_select_config,
-    input  OPB_seqAddr_config,
+    input         OPB_RNW_config,
+    input         OPB_select_config,
+    input         OPB_seqAddr_config,
 
     input  qdr_clk,
     /* Master interface to QDR controller */
     output   [QDR_ADDR_WIDTH - 1:0] master_addr,
-    output master_wr_strb,
+    output                          master_wr_strb,
     output [2*QDR_DATA_WIDTH - 1:0] master_wr_data,
     output   [2*QDR_BW_WIDTH - 1:0] master_wr_be,
-    output master_rd_strb,
+    output                          master_rd_strb,
     input  [2*QDR_DATA_WIDTH - 1:0] master_rd_data,
-    input  master_rd_dvld,
+    input                           master_rd_dvld,
 
     /* Slave interface to fabric */
-    input  [31:0] slave_addr,
-    input  slave_wr_strb,
+    input                    [31:0] slave_addr,
+    input                           slave_wr_strb,
     input  [2*QDR_DATA_WIDTH - 1:0] slave_wr_data,
-    input   [2*QDR_BW_WIDTH - 1:0] slave_wr_be,
-    input  slave_rd_strb,
-    output [2*QDR_DATA_WIDTH-1:0] slave_rd_data,
-    output slave_rd_dvld,
-    output slave_ack,
+    input    [2*QDR_BW_WIDTH - 1:0] slave_wr_be,
+    input                           slave_rd_strb,
+    output   [2*QDR_DATA_WIDTH-1:0] slave_rd_data,
+    output                          slave_rd_dvld,
+    output                          slave_ack,
 
-    /* State debug probes */
-    input [3:0] bit_align_state_prb,
-    input [3:0] bit_train_state_prb,
-    input [3:0] bit_train_error_prb,
-    input [3:0] phy_state_prb,
-
-    /* MMCM lock status */
-    input  fab_clk_lock,
-    input  sys_clk_lock,
+    input         dly_clk,
+    output        dly_extra_clk,
+    output [35:0] dly_en_i,
+    output [36:0] dly_en_o,
+    output        dly_inc_dec,
+	 
+    input [5*(37+36)-1 : 0] dly_cntrs,
 
     /* Misc signals */
     input  phy_rdy,
@@ -84,6 +82,8 @@ module opb_qdr_sniffer #(
   localparam BACKDOOR       = 4'h4;
   localparam BACKDOOR_WAIT  = 4'h8;
 
+  wire disable_fabric; //when high, mask out write enables from the fabric
+  wire slave_wr_strb_masked = slave_wr_strb && (!disable_fabric);
 
 generate if (ENABLE == 1) begin: qdr_enabled
 
@@ -134,7 +134,9 @@ generate if (ENABLE == 1) begin: qdr_enabled
 
   wire [0:31] Sl_DBus_int;
   assign Sl_DBus = Sl_xferAck ? Sl_DBus_int : 32'b0;
+  //assign Sl_DBus = Sl_DBus_int;
 
+  
   /* Inner generate. Select appropriate QDR interface based on QDR data width */
   if (QDR_DATA_WIDTH == 36) begin
     async_qdr_interface36 #(
@@ -159,8 +161,79 @@ generate if (ENABLE == 1) begin: qdr_enabled
       .qdr_w    (backdoor_w),
       .qdr_d    (backdoor_d),
       .qdr_be   (backdoor_be),
-      .qdr_q    (backdoor_q)
+      .qdr_q    (backdoor_q),
+      .sniffer_latch_out (sniffer_latch)
     );
+   //===========================================================================
+   // Chipscope modules used to debug the controller
+   //===========================================================================
+   /*wire [35:0] ctrl0;
+   wire [31:0] trig0,trig1,trig2,trig3,trig4,trig5,trig6,trig7,trig8,trig9,trig10,trig11,trig12,trig13,trig14,trig15;
+ 
+   chipscope_icon chipscope_icon_inst(
+     .CONTROL0    (ctrl0)
+   );
+ 
+   chipscope_ila chipscope_ila_inst(
+     .CONTROL   (ctrl0),
+     .CLK       (qdr_clk),
+     .TRIG0     (trig0),
+     .TRIG1     (trig1),
+     .TRIG2     (trig2),
+     .TRIG3     (trig3),
+     .TRIG4     (trig4),
+     .TRIG5     (trig5),
+     .TRIG6     (trig6),
+     .TRIG7     (trig7),
+     .TRIG8     (trig8),
+     .TRIG9     (trig9),
+     .TRIG10    (trig10),
+     .TRIG11    (trig11),
+     .TRIG12    (trig12),
+     .TRIG13    (trig13),
+     .TRIG14    (trig14),
+     .TRIG15    (trig15)
+   );
+
+  wire [31:0] master_rd_data_hi = {master_rd_data[70:63], master_rd_data[61:54], master_rd_data[52:45], master_rd_data[43:36]};
+  wire [31:0] master_rd_data_lo = {master_rd_data[34:27], master_rd_data[25:18], master_rd_data[16:9],  master_rd_data[7:0]};
+
+  wire [31:0] master_wr_data_hi = {master_wr_data[70:63], master_wr_data[61:54], master_wr_data[52:45], master_wr_data[43:36]};
+  wire [31:0] master_wr_data_lo = {master_wr_data[34:27], master_wr_data[25:18], master_wr_data[16:9],  master_wr_data[7:0]};
+
+   // 1 -> 31
+   assign trig0  = {27'h0, sniffer_latch, slave_ack, master_wr_strb, slave_wr_strb_masked, master_rd_strb, slave_rd_strb, master_rd_dvld, slave_rd_dvld};
+   // 32 -> 63
+   assign trig1  = {slave_rd_data};
+   // 64 -> 95
+   assign trig2  = {master_rd_data};
+   // 96 -> 127
+   assign trig3  = {};
+   // 128 -> 
+   assign trig4  = {slave_addr};
+   // 160
+   assign trig5  = {master_addr};
+   // 192
+   assign trig6  = {dly_en_i[31:0]};
+   // 224
+   assign trig7  = {dly_en_i[36:32], dly_en_o[36:32]};
+   // 256
+   assign trig8  = {dly_en_o[31:0]};
+   // 288
+   assign trig9  = {dly_inc_dec};
+   // 320
+   assign trig10 = {Sl_DBus_int};
+   // 352
+   assign trig11 = {master_rd_data_hi};
+   // 384
+   assign trig12 = {master_rd_data_lo};
+   // 416
+   assign trig13 = {OPB_DBus};
+   // 448
+   assign trig14 = {master_wr_data_hi};
+   // 480
+   assign trig15 = {master_wr_data_lo};
+*/
   end else begin
     async_qdr_interface #(
       .QDR_LATENCY(QDR_LATENCY)
@@ -200,13 +273,13 @@ generate if (ENABLE == 1) begin: qdr_enabled
     end else begin
       case (arb_sel)
         SLAVE: begin
-          if (backdoor_req && !(slave_wr_strb || slave_rd_strb)) begin
+          if (backdoor_req && !(slave_wr_strb_masked || slave_rd_strb)) begin
               arb_sel <= BACKDOOR;
 `ifdef DEBUG
               $display("sniff_arb: got backdoor_req without pending slave xfer");
 `endif
           end
-          if (backdoor_req && (slave_wr_strb || slave_rd_strb)) begin
+          if (backdoor_req && (slave_wr_strb_masked || slave_rd_strb)) begin
               arb_sel <= SLAVE_WAIT;
 `ifdef DEBUG
               $display("sniff_arb: got backdoor_req with pending slave xfer");
@@ -232,7 +305,7 @@ generate if (ENABLE == 1) begin: qdr_enabled
   assign slave_ack    = arb_sel == SLAVE;
   assign backdoor_ack = arb_sel == BACKDOOR;
 
-  assign master_wr_strb = slave_wr_strb && slave_ack || backdoor_w && backdoor_ack;
+  assign master_wr_strb = slave_wr_strb_masked && slave_ack || backdoor_w && backdoor_ack;
   assign master_rd_strb = slave_rd_strb && slave_ack || backdoor_r && backdoor_ack;
   assign master_addr    = slave_ack ? slave_addr[QDR_ADDR_WIDTH - 1:0]  : backdoor_addr[QDR_ADDR_WIDTH - 1:0];
   assign master_wr_data = arb_sel == SLAVE || arb_sel == SLAVE_WAIT ? slave_wr_data : backdoor_d;
@@ -252,7 +325,7 @@ end else begin : qdr_disabled
   assign Sl_DBus    = 32'b0;
 
   assign master_addr    = slave_addr[QDR_ADDR_WIDTH - 1:0];
-  assign master_wr_strb = slave_wr_strb;
+  assign master_wr_strb = slave_wr_strb_masked;
   assign master_wr_data = slave_wr_data;
   assign master_wr_be   = slave_wr_be;
   assign master_rd_strb = slave_rd_strb;
@@ -261,18 +334,10 @@ end else begin : qdr_disabled
   assign slave_ack      = 1'b1;
 end endgenerate
 
-  reg [3:0] bit_align_state_prbR;
-  reg [3:0] bit_train_state_prbR;
-  reg [3:0] bit_train_error_prbR;
-  reg [3:0] phy_state_prbR;
   reg phy_rdyR;
   reg cal_failR;
 
   always @(posedge OPB_Clk_config) begin
-    bit_align_state_prbR <= bit_align_state_prb;
-    bit_train_state_prbR <= bit_train_state_prb;
-    bit_train_error_prbR <= bit_train_error_prb;
-    phy_state_prbR <= phy_state_prb;
     phy_rdyR <= phy_rdy;
     cal_failR <= cal_fail;
   end
@@ -297,17 +362,19 @@ end endgenerate
     .OPB_RNW     (OPB_RNW_config),
     .OPB_select  (OPB_select_config),
     .OPB_seqAddr (OPB_seqAddr_config),
-    .bit_align_state_prb (bit_align_state_prbR),
-    .bit_train_state_prb (bit_train_state_prbR),
-    .bit_train_error_prb (bit_train_error_prbR),
-    .phy_state_prb       (phy_state_prbR),
-    .fab_clk_lock        (fab_clk_lock),
-    .sys_clk_lock        (sys_clk_lock),
-    .qdr_reset   (qdr_reset),
-    .cal_fail    (cal_failR),
-    .phy_rdy     (phy_rdyR),
-    .qdr_clk     (qdr_clk)
-  );
 
+    .dly_extra_clk (dly_extra_clk),
+    .disable_fabric(disable_fabric),
+    .dly_clk       (dly_clk),
+    .dly_en_i      (dly_en_i),
+    .dly_en_o      (dly_en_o),
+    .dly_inc_dec   (dly_inc_dec),
+    .dly_cntrs     (dly_cntrs),
+
+    .qdr_reset     (qdr_reset),
+    .cal_fail      (cal_failR),
+    .phy_rdy       (phy_rdyR),
+    .qdr_clk       (qdr_clk)
+  );
 
 endmodule

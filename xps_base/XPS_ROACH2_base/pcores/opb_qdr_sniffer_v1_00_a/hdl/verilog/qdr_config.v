@@ -19,15 +19,14 @@ module qdr_config #(
     input  OPB_select,
     input  OPB_seqAddr,
 
-    /* State debug probes */
-    input [3:0] bit_align_state_prb,
-    input [3:0] bit_train_state_prb,
-    input [3:0] bit_train_error_prb,
-    input [3:0] phy_state_prb,
+    input         dly_clk,
+    output [35:0] dly_en_i,
+    output [36:0] dly_en_o,
+    output        dly_inc_dec,
+    output        dly_extra_clk,
+    output        disable_fabric,
 
-    /* MMCM lock status */
-    input  fab_clk_lock,
-    input  sys_clk_lock,
+    input [5*(37+36)-1:0] dly_cntrs,
 
     /* Misc signals */
     output qdr_reset,
@@ -38,23 +37,32 @@ module qdr_config #(
 
   /************************** Registers *******************************/
 
-  localparam REG_RESET  = 0;
-  localparam REG_STATUS = 1;
-  localparam REG_SM_PRB = 2;
-  localparam REG_SM_ERR = 3;
+  localparam REG_RESET          = 0;
+  localparam REG_STATUS         = 1;
+  localparam REG_DISABLE_FABRIC = 2;
+  localparam REG_DLY_EN_0       = 4;
+  localparam REG_DLY_EN_1       = 5;
+  localparam REG_DLY_EN_2       = 6;
+  localparam REG_DLY_INC_DEC    = 7;
+  localparam REG_DLY_CNTRS0     = 8;
+  localparam REG_EXTRA_CLK      = 9;
 
   /**************** Control Registers OPB Attachment ******************/
   
+  reg [35:0] dly_en_i_reg;
+  reg [36:0] dly_en_o_reg;
+  reg        dly_inc_dec_reg;
+  reg        dly_extra_clk_reg;
+  reg        disable_fabric_reg;
+
   /* OPB Address Decoding */
   wire [31:0] opb_addr = OPB_ABus - C_BASEADDR;
   wire opb_sel = (OPB_ABus >= C_BASEADDR && OPB_ABus < C_HIGHADDR) && OPB_select;
-
 
   /* OPB Registers */
   reg Sl_xferAck_reg;
   reg [3:0] opb_data_sel;
 
-  reg qdr_hard_reset;
   reg [4:0] qdr_reset_shifter;
 
   always @(posedge OPB_Clk) begin
@@ -73,14 +81,44 @@ module qdr_config #(
             if (!OPB_RNW) begin
               if (OPB_BE[3])
                 qdr_reset_shifter[0] <= OPB_DBus[31];
-              if (OPB_BE[2])
-                qdr_hard_reset       <= OPB_DBus[23];
+            end
+          end
+          REG_DISABLE_FABRIC: begin
+            if (!OPB_RNW) begin
+              disable_fabric_reg <= OPB_DBus[31];
+            end
+          end
+          REG_DLY_EN_0: begin
+            if (!OPB_RNW) begin
+              dly_en_i_reg[31:0] <= OPB_DBus[0:31];
+            end
+          end
+          REG_DLY_EN_1: begin
+            if (!OPB_RNW) begin
+              dly_en_i_reg[35:32] <= OPB_DBus[28:31];
+              dly_en_o_reg[36:32] <= OPB_DBus[23:27];
+            end
+          end
+          REG_DLY_EN_2: begin
+            if (!OPB_RNW) begin
+              dly_en_o_reg[31:0] <= OPB_DBus[0:31];
+            end
+          end
+          REG_DLY_INC_DEC: begin
+            if (!OPB_RNW) begin
+              dly_inc_dec_reg <= OPB_DBus[31];
+            end
+          end
+          REG_EXTRA_CLK: begin
+            if (!OPB_RNW) begin
+              dly_extra_clk_reg <= OPB_DBus[31];
             end
           end
         endcase
-      end
+ 	  end
     end
   end
+
 
   /* Continuous Read Logic */
   reg [0:31] Sl_DBus_reg;
@@ -88,17 +126,14 @@ module qdr_config #(
   always @(*) begin
     if (Sl_xferAck_reg) begin
       case (opb_data_sel) 
-        REG_RESET: begin
-	  Sl_DBus_reg <= {8'b0, 7'b0, sys_clk_lock, 7'b0, fab_clk_lock, 7'b0, qdr_reset};
-        end
         REG_STATUS: begin
           Sl_DBus_reg <= {16'b0, 7'b0, cal_fail, 7'b0, phy_rdy};
         end
-        REG_SM_PRB: begin
-          Sl_DBus_reg <= {1'b1, 7'b0, 8'b0, 4'b0, phy_state_prb, bit_align_state_prb, bit_train_state_prb};
+        REG_DLY_CNTRS0: begin
+          Sl_DBus_reg <= dly_cntrs[31:0];
         end
-        REG_SM_ERR: begin
-          Sl_DBus_reg <= {1'b1, 7'b0, 8'b0, 8'b0, 4'b0, bit_train_error_prb};
+        REG_EXTRA_CLK: begin
+          Sl_DBus_reg[31] <= dly_extra_clk_reg;
         end
         default: begin
           Sl_DBus_reg <= 32'h0;
@@ -110,7 +145,6 @@ module qdr_config #(
   end
 
   /* OPB output assignments */
-
   assign Sl_errAck   = 1'b0;
   assign Sl_retry    = 1'b0;
   assign Sl_toutSup  = 1'b0;
@@ -124,6 +158,48 @@ module qdr_config #(
     qdr_reset_R  <= |qdr_reset_shifter;
     qdr_reset_RR <= qdr_reset_R;
   end
-  assign qdr_reset = (qdr_reset_RR || qdr_hard_reset || !(fab_clk_lock && sys_clk_lock));
+  assign qdr_reset = qdr_reset_RR;
 
+  wire [35:0] dly_en_i_clk_crossed;
+  wire [36:0] dly_en_o_clk_crossed;
+  wire        dly_inc_dec_clk_crossed;
+  wire dly_extra_clk_crossed;
+  wire disable_fabric_crossed;
+
+  assign dly_inc_dec = dly_inc_dec_clk_crossed;
+  assign dly_extra_clk = dly_extra_clk_crossed;
+  assign disable_fabric = disable_fabric_crossed;
+ 
+  /*** cross the clock domains ***/  
+  clk_domain_crosser #(
+    .DATA_WIDTH (1)
+  ) clk_domain_crosser [73:0](
+    .in_clk   (OPB_Clk),
+    .out_clk  (dly_clk),
+    .rst      (OPB_Rst),
+    .data_in  ({dly_en_i_reg,         dly_en_o_reg,         dly_inc_dec_reg        }),
+    .data_out ({dly_en_i_clk_crossed, dly_en_o_clk_crossed, dly_inc_dec_clk_crossed})
+  );
+
+  clk_domain_crosser #(
+    .DATA_WIDTH (1)
+  ) clk_domain_crosser_ec [1:0] (
+    .in_clk   (OPB_Clk),
+    .out_clk  (qdr_clk),
+    .rst      (OPB_Rst),
+    .data_in  ({dly_extra_clk_reg, disable_fabric_reg}),
+    .data_out ({dly_extra_clk_crossed, disable_fabric_crossed})
+  );
+  
+  /*** edge detect ***/
+  edge_detect #(
+    .DATA_WIDTH (1),
+    .EDGE_TYPE ("RISE")
+  ) dly_en_edge_detect [72:0](
+    .clk       (dly_clk),
+    .en        (1'b1),
+    .in        ({dly_en_i_clk_crossed[35:0], dly_en_o_clk_crossed[36:0]}),
+    .pulse_out ({dly_en_i,                   dly_en_o})
+  );
+  
 endmodule
